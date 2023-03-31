@@ -1,6 +1,6 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT License.
+﻿// Copyright (c) Microsoft. All rights reserved. Licensed under the MIT License.
 
+using System;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -8,29 +8,35 @@ using System.Threading.Tasks;
 using KernelHttpServer.Model;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.SemanticKernel.AI.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI.ChatCompletion;
+using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Memory;
 using Microsoft.SemanticKernel.Orchestration;
+using KernelHttpServer.Utils;
 
 namespace KernelHttpServer;
 
 public class SemanticKernelEndpoint
 {
     private readonly IMemoryStore<float> _memoryStore;
+    private readonly IKernel _kernel;
 
-    public SemanticKernelEndpoint(IMemoryStore<float> memoryStore)
+    public SemanticKernelEndpoint(IMemoryStore<float> memoryStore, IKernel kernel)
     {
         this._memoryStore = memoryStore;
+        this._kernel = kernel;
     }
 
     [Function("InvokeFunction")]
     public async Task<HttpResponseData> InvokeFunctionAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "skills/{skillName}/invoke/{functionName}")]
+        [HttpTrigger(AuthorizationLevel.Admin, "post", Route = "skills/{skillName}/invoke/{functionName}")]
         HttpRequestData req,
         FunctionContext executionContext, string skillName, string functionName)
     {
-        // in this sample we are using a per-request kernel that is created on each invocation
-        // once created, we feed the kernel the ask received via POST from the client
-        // and attempt to invoke the function with the given name
+        // in this sample we are using a per-request kernel that is created on each invocation once
+        // created, we feed the kernel the ask received via POST from the client and attempt to
+        // invoke the function with the given name
 
         var ask = await JsonSerializer.DeserializeAsync<Ask>(req.Body, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
@@ -73,7 +79,7 @@ public class SemanticKernelEndpoint
 
     [Function("ExecutePlan")]
     public async Task<HttpResponseData> ExecutePlanAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "planner/execute/{maxSteps?}")]
+        [HttpTrigger(AuthorizationLevel.Admin, "post", Route = "planner/execute/{maxSteps?}")]
         HttpRequestData req,
         FunctionContext executionContext, int? maxSteps = 10)
     {
@@ -121,5 +127,35 @@ public class SemanticKernelEndpoint
         var r = req.CreateResponse(HttpStatusCode.OK);
         await r.WriteAsJsonAsync(new AskResult { Value = result.Variables.ToPlan().Result });
         return r;
+    }
+
+    [Function("Ask")]
+    public async Task<string> AskAsync(
+        [HttpTrigger(AuthorizationLevel.User, "post", Route = "ask")]
+        HttpRequestData req,
+        FunctionContext executionContext, string message)
+    {
+        IChatCompletion chatGPT = this._kernel.GetService<IChatCompletion>();
+        var chat = (OpenAIChatHistory)chatGPT.CreateNewChat("你是一位乐于助人的助理");
+
+        // First user message
+        chat.AddUserMessage(message);
+
+        // First bot message
+        string reply = await chatGPT.GenerateMessageAsync(chat, new ChatRequestSettings() { MaxTokens = 1000 });
+        chat.AddAssistantMessage(reply);
+
+        foreach (var item in chat.Messages)
+        {
+            Console.WriteLine($"{item.AuthorRole}: {item.Content}");
+            Console.WriteLine("------------------------");
+        }
+
+        if (string.IsNullOrWhiteSpace(reply))
+        {
+            reply = "抱歉，我回答不了你的问题！";
+        }
+
+        return reply;
     }
 }
