@@ -74,5 +74,18 @@
   },
   "cSpell.words": [
     "Partitioner"
-  ]
+  ],
+  "azureFunctions.deploySubpath": "samples/dotnet/KernelHttpServer/bin/Release/net6.0/publish",
+  "azureFunctions.projectLanguage": "C#",
+  "azureFunctions.projectRuntime": "~4",
+  "debug.internalConsoleOptions": "neverOpen",
+  "azureFunctions.projectSubpath": "samples/dotnet/KernelHttpServer",
+  "azureFunctions.preDeployTask": "publish (functions)",
+  "workbench.colorCustomizations": {
+    "editor.lineHighlightBackground": "#1073cf2d",
+    "editor.lineHighlightBorder": "#9fced11f",
+    "activityBar.background": "#043619",
+    "titleBar.activeBackground": "#054B24",
+    "titleBar.activeForeground": "#EFFEF5"
+  }
 }
